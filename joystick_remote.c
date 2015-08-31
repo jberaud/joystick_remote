@@ -57,7 +57,7 @@ static struct option long_options[] = {
 static struct joystick joystick;
 static struct remote remote;
 
-static const char *usage = "usage:\n\tjoystick_remote -d your_device -r remote_address:remote_port\n";
+static const char usage[] = "usage:\n\tjoystick_remote -d your_device -r remote_address:remote_port\n";
 static uint8_t verbose = 0;
 
 void debug_printf(const char *fmt, ...)
@@ -71,7 +71,7 @@ void debug_printf(const char *fmt, ...)
     }
 }
 
-void microsleep(uint32_t usec) {
+static void microsleep(uint32_t usec) {
     struct timespec ts;
 
     ts.tv_sec = 0;
@@ -79,7 +79,7 @@ void microsleep(uint32_t usec) {
     while (nanosleep(&ts, &ts) == -1 && errno == EINTR);
 }
 
-uint64_t get_micro64()
+static uint64_t get_micro64()
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
