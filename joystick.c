@@ -33,10 +33,20 @@
 #include "joystick.h"
 #include "joystick_remote.h"
 
+static uint8_t skycontroller_buttons[JOYSTICK_NUM_MODES] = { 8, 9, 2, 0, 1, 3};
+static uint8_t xbox360_buttons[JOYSTICK_NUM_MODES] = { 0, 1, 2, 3, 4, 5};
+static struct joystick_axis skycontroller_axes[JOYSTICK_NUM_AXIS] = {{2, 1}, {3, -1}, {1, -1}, {0, 1}};
+static struct joystick_axis xbox360_axes[JOYSTICK_NUM_AXIS] = {{3, 1}, {4, 1}, {1, -1}, {0, 1}};
+
 #define JOYSTICK_AXIS_MIN -32767.0f
 #define JOYSTICK_AXIS_MAX  32767.0f
 #define JOYSTICK_PWM_MIN   1100.0f
 #define JOYSTICK_PWM_MAX   1900.0f
+
+static const struct joystick_pwms def_pwms = {1500, 1500, 1500, 1500, 1500};
+/* these values are in the middle of the ranges that are documented
+ * in the arducopter parameter list as Flight Mode 1-6 */
+static const uint16_t mode_pwm_values[JOYSTICK_NUM_MODES] = { 1165, 1295, 1425, 1555, 1685, 1815 };
 
 static uint16_t axis_to_pwm(int16_t value)
 {
@@ -53,18 +63,18 @@ static void joystick_handle_axis(struct joystick *joystick,
     debug_printf("joystick_handle_axis : %d, %d\n", number, value);
     pthread_mutex_lock(&joystick->mutex);
 
-    if (number == joystick->axis[JOYSTICK_AXIS_ROLL].number) {
+    if (number == joystick->axes[JOYSTICK_AXIS_ROLL].number) {
         joystick->pwms.roll = 
-            axis_to_pwm(joystick->axis[JOYSTICK_AXIS_ROLL].direction * value);
-    } else if (number == joystick->axis[JOYSTICK_AXIS_PITCH].number) {
+            axis_to_pwm(joystick->axes[JOYSTICK_AXIS_ROLL].direction * value);
+    } else if (number == joystick->axes[JOYSTICK_AXIS_PITCH].number) {
         joystick->pwms.pitch = 
-            axis_to_pwm(joystick->axis[JOYSTICK_AXIS_PITCH].direction * value);
-    } else if (number == joystick->axis[JOYSTICK_AXIS_THROTTLE].number) {
+            axis_to_pwm(joystick->axes[JOYSTICK_AXIS_PITCH].direction * value);
+    } else if (number == joystick->axes[JOYSTICK_AXIS_THROTTLE].number) {
         joystick->pwms.throttle =
-            axis_to_pwm(joystick->axis[JOYSTICK_AXIS_THROTTLE].direction * value);
-    } else if (number == joystick->axis[JOYSTICK_AXIS_YAW].number) {
+            axis_to_pwm(joystick->axes[JOYSTICK_AXIS_THROTTLE].direction * value);
+    } else if (number == joystick->axes[JOYSTICK_AXIS_YAW].number) {
         joystick->pwms.yaw = 
-            axis_to_pwm(joystick->axis[JOYSTICK_AXIS_YAW].direction * value);
+            axis_to_pwm(joystick->axes[JOYSTICK_AXIS_YAW].direction * value);
     }
     else {
         debug_printf("joystick_handle_axis : unmapped axis\n");
@@ -78,14 +88,26 @@ static void joystick_handle_button(struct joystick *joystick,
     debug_printf("joystick_handle_button : %d, %d\n", number, value);
     pthread_mutex_lock(&joystick->mutex);
 
-    if (value == 1) {
-        /* button pressed */
-        uint8_t mode_button = joystick->mode_button[number];
+    /* only take button presses into account */
+    if (value != 1)
+        goto end;
 
-        /* registered button */
-        joystick->pwms.mode = joystick->mode_pwm[mode_button];
+    if (number == joystick->buttons[JOYSTICK_BUTTON_MODE1]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE1];
+    } else if (number == joystick->buttons[JOYSTICK_BUTTON_MODE2]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE2];
+    } else if (number == joystick->buttons[JOYSTICK_BUTTON_MODE3]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE3];
+    } else if (number == joystick->buttons[JOYSTICK_BUTTON_MODE4]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE4];
+    } else if (number == joystick->buttons[JOYSTICK_BUTTON_MODE5]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE5];
+    } else if (number == joystick->buttons[JOYSTICK_BUTTON_MODE6]) {
+        joystick->pwms.mode = mode_pwm_values[JOYSTICK_BUTTON_MODE6];
+    } else {
+        debug_printf("joystick_handle_button : unmapped button\n");
     }
-
+end:
     pthread_mutex_unlock(&joystick->mutex);
 }
 
@@ -145,8 +167,10 @@ int joystick_start(char *path, struct joystick *joystick)
 {
     int ret;
     pthread_attr_t attr;
+    uint8_t n_axes, n_buttons;
 
     memset(joystick, 0, sizeof(struct joystick));
+    memcpy(&joystick->pwms, &def_pwms, sizeof(joystick->pwms));
 
     joystick->fd = open(path, O_RDONLY);
 
@@ -163,19 +187,19 @@ int joystick_start(char *path, struct joystick *joystick)
     }
     debug_printf("Joystick : %s\n", joystick->name);
 
-    ret = ioctl(joystick->fd, JSIOCGAXES, &joystick->axes);
+    ret = ioctl(joystick->fd, JSIOCGAXES, &n_axes);
     if (ret == -1) {
         perror("joystick_start - JSIOCGAXES");
         return -1;
     }
-    debug_printf("Joystick has %d axes\n", joystick->axes);
+    debug_printf("Joystick has %d axes\n", n_axes);
 
-    ret = ioctl(joystick->fd, JSIOCGBUTTONS, &joystick->buttons);
+    ret = ioctl(joystick->fd, JSIOCGBUTTONS, &n_buttons);
     if (ret == -1) {
         perror("joystick_start - JSIOCGBUTTONS");
         return -1;
     }
-    debug_printf("Joystick has %d buttons\n", joystick->buttons);
+    debug_printf("Joystick has %d buttons\n", n_buttons);
     ret = pthread_mutex_init(&joystick->mutex, NULL);
     if (ret != 0) {
         perror("joystick_start - pthread_mutex_init");
@@ -205,13 +229,22 @@ void joystick_get_pwms(struct joystick *joystick, uint16_t *pwms, uint8_t *len)
     return;
 }
 
-void joystick_set_calib(struct joystick *joystick, uint8_t *buttons,
-                        uint16_t *mode_pwm, struct joystick_axis *axis)
+int joystick_set_type(struct joystick *joystick, char *type)
 {
+    int ret = 0;
+
     pthread_mutex_lock(&joystick->mutex);
-    memcpy(&joystick->mode_button, buttons, sizeof(joystick->mode_button));
-    memcpy(&joystick->mode_pwm, mode_pwm, sizeof(joystick->mode_pwm));
-    memcpy(&joystick->axis, axis, sizeof(joystick->axis));
+    if (!strcmp(type, "x") || !strcmp(type, "xbox360")) {
+        memcpy(&joystick->buttons, xbox360_buttons, sizeof(joystick->buttons));
+        memcpy(&joystick->axes, xbox360_axes, sizeof(joystick->axes));
+    } else if (!strcmp(type, "s") || !strcmp(type, "skycontroller")) {
+        memcpy(&joystick->buttons, skycontroller_buttons, sizeof(joystick->buttons));
+        memcpy(&joystick->axes, skycontroller_axes, sizeof(joystick->axes));
+    } else {
+        debug_printf("bad joystick type\n");
+        ret = -1;
+    }
     pthread_mutex_unlock(&joystick->mutex);
+    return ret;
 }
     

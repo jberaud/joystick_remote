@@ -33,14 +33,6 @@
 #include "remote.h"
 #include "joystick_remote.h"
 
-/* These buttons correspond to buttons A B X Y of the
- * Microsoft XBOX 360 Controller */
-static uint8_t default_buttons[MAX_NUM_BUTTONS] = { 0, 1, 2, 3, 4, 5 };
-static struct joystick_axis default_axis[JOYSTICK_NUM_AXIS] = {{3, 1}, {4, 1}, {1, -1}, {0, 1}};
-/* these values are in the middle of the ranges that are documented
- * in the arducopter parameter list as Flight Mode 1-6 */
-static uint16_t default_mode_pwm[MAX_NUM_MODES] = { 1165, 1295, 1425, 1555, 1685, 1815 };
-
 static struct timespec start_time;
 
 static struct option long_options[] = {
@@ -49,7 +41,7 @@ static struct option long_options[] = {
     {"mode",      required_argument, 0,     'm' },
     {"verbose",   no_argument, 0,           'v' },
     {"remote",    required_argument, 0,     'r' },
-    {"calibrate", no_argument, 0,           'c' },
+    {"type",      required_argument, 0,     't' },
     {"help",      no_argument, 0,           'h' },
     {0, 0, 0, 0 }
 };
@@ -92,6 +84,7 @@ int main(int argc, char **argv)
 {
     int c;
     char *device_path = NULL;
+    char *joystick_type = NULL;
     uint64_t next_run_usec;
     char *remote_host;
     uint16_t pwms[RCINPUT_UDP_NUM_CHANNELS];
@@ -101,7 +94,7 @@ int main(int argc, char **argv)
 
     while (1) {
 
-        c = getopt_long(argc, argv, "vld:m:r:ch", long_options, NULL);
+        c = getopt_long(argc, argv, "vld:m:r:cht:", long_options, NULL);
         if (c == -1)
             break;
 
@@ -123,8 +116,9 @@ int main(int argc, char **argv)
             debug_printf("set remote to %s\n", optarg);
             remote_host = optarg;
             break;
-        case 'c':
-            debug_printf("calibrate\n");
+        case 't':
+            debug_printf("set joystick_type to %s\n", optarg);
+            joystick_type = optarg;
             break;
         case 'h':
             debug_printf(usage);
@@ -161,12 +155,11 @@ int main(int argc, char **argv)
     }
 
     /* Calibration procedure to be added */
-    joystick_set_calib(&joystick, default_buttons, default_mode_pwm, default_axis);
+    joystick_set_type(&joystick, joystick_type);
 
     /* get start time, necessary for get_micro64) */
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
-    memset(pwms, 0, sizeof(pwms));
     next_run_usec = get_micro64() + 10000;
     while (1) {
         uint64_t dt = next_run_usec - get_micro64();
@@ -182,7 +175,7 @@ int main(int argc, char **argv)
         next_run_usec += 10000;
         joystick_get_pwms(&joystick, pwms, &len);
         remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
-        debug_printf("Micros : %lu, Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
+        debug_printf("Micros : %llu, Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
                 micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
     }
 

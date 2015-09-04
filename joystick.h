@@ -20,8 +20,6 @@
 #define _JOYSTICK_H_
 
 #define MAX_NAME_LEN 128
-#define MAX_NUM_BUTTONS 128
-#define MAX_NUM_MODES 6
 
 enum {
     JOYSTICK_AXIS_ROLL,
@@ -29,6 +27,16 @@ enum {
     JOYSTICK_AXIS_THROTTLE,
     JOYSTICK_AXIS_YAW,
     JOYSTICK_NUM_AXIS
+};
+
+enum {
+    JOYSTICK_BUTTON_MODE1,
+    JOYSTICK_BUTTON_MODE2,
+    JOYSTICK_BUTTON_MODE3,
+    JOYSTICK_BUTTON_MODE4,
+    JOYSTICK_BUTTON_MODE5,
+    JOYSTICK_BUTTON_MODE6,
+    JOYSTICK_NUM_MODES
 };
 
 struct joystick_pwms {
@@ -47,8 +55,6 @@ struct joystick_axis {
 
 struct joystick {
     char name[MAX_NAME_LEN];
-    uint8_t axes;
-    uint8_t buttons;
     int fd;
     pthread_t thread;
     pthread_mutex_t mutex;
@@ -56,18 +62,17 @@ struct joystick {
     struct joystick_pwms pwms;
 
     /* buttons mapping */
-    uint8_t mode_button[MAX_NUM_BUTTONS];
+    uint8_t buttons[JOYSTICK_NUM_MODES];
 
     /* axis mapping */
-    struct joystick_axis axis[JOYSTICK_NUM_AXIS];
+    struct joystick_axis axes[JOYSTICK_NUM_AXIS];
     
     /* modes pwm mapping */
-    uint16_t mode_pwm[MAX_NUM_MODES];
+    uint16_t mode_pwms[JOYSTICK_NUM_MODES];
 };
 
 int joystick_start(char *path, struct joystick *joystick);
 void joystick_get_pwms(struct joystick *joystick, uint16_t *pwms, uint8_t *len);
-void joystick_set_calib(struct joystick *joystick, uint8_t *buttons,
-                        uint16_t *pwms, struct joystick_axis *axis);
+int joystick_set_type(struct joystick *joystick, char *type);
 
 #endif // _JOYSTICK_H_
