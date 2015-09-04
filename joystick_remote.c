@@ -49,7 +49,8 @@ static struct option long_options[] = {
 static struct joystick joystick;
 static struct remote remote;
 
-static const char usage[] = "usage:\n\tjoystick_remote -d your_device -r remote_address:remote_port\n";
+static const char usage[] = "usage:\n\tjoystick_remote -d your_device "
+                            "-t joystick_type -r remote_address:remote_port\n";
 static uint8_t verbose = 0;
 
 void debug_printf(const char *fmt, ...)
@@ -86,7 +87,7 @@ int main(int argc, char **argv)
     char *device_path = NULL;
     char *joystick_type = NULL;
     uint64_t next_run_usec;
-    char *remote_host;
+    char *remote_host = NULL;
     uint16_t pwms[RCINPUT_UDP_NUM_CHANNELS];
 
     if (argc < 2)
@@ -121,40 +122,49 @@ int main(int argc, char **argv)
             joystick_type = optarg;
             break;
         case 'h':
-            debug_printf(usage);
+            printf(usage);
             goto end;
         case '?':
-            debug_printf(usage);
+            printf(usage);
             goto end;
         default:
-            printf("bad option parsed by getopt : %d\n", c);
+            fprintf(stderr, "bad option parsed by getopt : %d\n", c);
             goto end;
         }
     }
 
     if (optind < argc) {
-        printf("wrong option in arguments: ");
+        fprintf(stderr, "wrong option in arguments: ");
         while (optind < argc)
             printf("%s", argv[optind++]);
         printf("\n");
     }
 
     if (device_path == NULL) {
-        printf("you must specify a device with -d option\n");
+        fprintf(stderr, "you must specify a device with -d option\n");
         goto end;
     }
 
     if (joystick_start(device_path, &joystick) == -1) {
-        printf("joystick start failed\n");
+        fprintf(stderr, "joystick start failed\n");
+        goto end;
+    }
+
+    if (remote_host == NULL) {
+        fprintf(stderr, "no ip address specified\n");
         goto end;
     }
 
     if (remote_start(remote_host, &remote) == -1) {
-        printf("remote start failed\n");
+        fprintf(stderr, "remote start failed\n");
         goto end;
     }
 
     /* Calibration procedure to be added */
+    if (joystick_type == NULL) {
+        fprintf(stderr, "no joystick type specified\n");
+        goto end;
+    }
     joystick_set_type(&joystick, joystick_type);
 
     /* get start time, necessary for get_micro64) */

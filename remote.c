@@ -83,6 +83,8 @@ void remote_send_pwms(struct remote *remote, uint16_t *pwms,
     memset(&msg, 0, sizeof(msg));
     msg.version = RCINPUT_UDP_VERSION;
     msg.timestamp_us = micro64;
+    msg.sequence++;
+
     if (len > sizeof(msg.pwms)) {
         fprintf(stderr, "remote_send_pwms : bad len %d\n", len);
         return;
