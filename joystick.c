@@ -35,8 +35,10 @@
 
 static uint8_t skycontroller_buttons[JOYSTICK_NUM_MODES] = { 8, 9, 2, 0, 1, 3};
 static uint8_t xbox360_buttons[JOYSTICK_NUM_MODES] = { 0, 1, 2, 3, 4, 5};
+static uint8_t ps3_buttons[JOYSTICK_NUM_MODES] = { 0, 1, 2, 3, 5, 4};
 static struct joystick_axis skycontroller_axes[JOYSTICK_NUM_AXIS] = {{2, 1}, {3, -1}, {1, -1}, {0, 1}};
 static struct joystick_axis xbox360_axes[JOYSTICK_NUM_AXIS] = {{3, 1}, {4, 1}, {1, -1}, {0, 1}};
+static struct joystick_axis ps3_axes[JOYSTICK_NUM_AXIS] = { {2, 1}, {3, -1}, {1, -1}, {0, 1}};
 
 #define JOYSTICK_AXIS_MIN -32767.0f
 #define JOYSTICK_AXIS_MAX  32767.0f
@@ -240,6 +242,9 @@ int joystick_set_type(struct joystick *joystick, char *type)
     } else if (!strcmp(type, "s") || !strcmp(type, "skycontroller")) {
         memcpy(&joystick->buttons, skycontroller_buttons, sizeof(joystick->buttons));
         memcpy(&joystick->axes, skycontroller_axes, sizeof(joystick->axes));
+    } else if (!strcmp(type, "ps3") || !strcmp(type, "playstation3")) {
+        memcpy(&joystick->buttons, ps3_buttons, sizeof(joystick->buttons));
+        memcpy(&joystick->axes, ps3_axes, sizeof(joystick->axes));
     } else {
         debug_printf("bad joystick type\n");
         ret = -1;
