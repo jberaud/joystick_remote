@@ -28,6 +28,7 @@
 #include <time.h>
 #include <stdarg.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "joystick.h"
 #include "remote.h"
@@ -186,7 +187,7 @@ int main(int argc, char **argv)
         next_run_usec += 10000;
         joystick_get_pwms(&joystick, pwms, &len);
         remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
-        debug_printf("Micros : %llu, Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
+        debug_printf("Micros : %" PRIu64", Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
                 micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
     }
 
