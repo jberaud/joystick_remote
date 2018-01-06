@@ -40,6 +40,7 @@ static struct option long_options[] = {
     {"list",      no_argument, 0,           'l' },
     {"device",    required_argument, 0,     'd' },
     {"mode",      required_argument, 0,     'm' },
+    {"simulation",no_argument, 0,           's' },
     {"verbose",   no_argument, 0,           'v' },
     {"remote",    required_argument, 0,     'r' },
     {"type",      required_argument, 0,     't' },
@@ -52,6 +53,7 @@ static struct remote remote;
 
 static const char usage[] = "usage:\n\tjoystick_remote -d your_device "
                             "-t joystick_type -r remote_address:remote_port\n\n"
+                            "\t-s Simulation mode. It will ignore -r if given\n\n"
                             "\tjoystick types: xbox360, skycontroller and ps3\n\n";
 static uint8_t verbose = 0;
 
@@ -84,9 +86,23 @@ static uint64_t get_micro64()
 }
 
 
-void run_simulation()
+void run_simulation(uint16_t pwms[])
 {
+  uint8_t size;
+  const char *pwm_explain[] = {"Roll: ", "Pitch: ", "Throttle: ", "Yaw: ", "Mode: "};
 
+  while (1) {
+    joystick_get_pwms(&joystick, pwms, &size);
+
+    printf("\033[H\033[J");
+    for(uint16_t i = 0; i < size/sizeof(pwms[0]); i++)
+    {
+      printf("%s", pwm_explain[i]);
+      printf("%hu\n", pwms[i]);
+    }
+
+    microsleep(1000);
+  }
 }
 
 void run_remote(uint16_t pwms[], char *remote_host)
@@ -142,7 +158,7 @@ int main(int argc, char **argv)
 
     while (1) {
 
-        c = getopt_long(argc, argv, "vld:m:r:cht:", long_options, NULL);
+        c = getopt_long(argc, argv, "vld:m:r:cht:s", long_options, NULL);
         if (c == -1)
             break;
 
@@ -214,7 +230,7 @@ int main(int argc, char **argv)
     if (!simulation) {
       run_remote(pwms, remote_host);
     } else {
-      run_simulation();
+      run_simulation(pwms);
     }
 
 end:
