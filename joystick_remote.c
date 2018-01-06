@@ -12,7 +12,7 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with joystick_remote.  
+    along with joystick_remote.
     If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -78,17 +78,62 @@ static uint64_t get_micro64()
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - 
+    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) -
                   (start_time.tv_sec +
-                   (start_time.tv_nsec*1.0e-9)));
+                  (start_time.tv_nsec*1.0e-9)));
 }
+
+
+void run_simulation()
+{
+
+}
+
+void run_remote(uint16_t pwms[], char *remote_host)
+{
+  uint64_t next_run_usec;
+
+  if (remote_host == NULL) {
+    fprintf(stderr, "no ip address specified\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (remote_start(remote_host, &remote) == -1) {
+    fprintf(stderr, "remote start failed\n");
+    exit(EXIT_FAILURE);
+  }
+
+  /* get start time, necessary for get_micro64) */
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+  next_run_usec = get_micro64() + 10000;
+
+  while (1) {
+    uint64_t dt = next_run_usec - get_micro64();
+    uint64_t micro64;
+    uint8_t len;
+
+    if (dt > 20000) {
+      // we've lost sync - restart
+      next_run_usec = get_micro64();
+    } else {
+      microsleep(dt);
+    }
+    next_run_usec += 10000;
+    joystick_get_pwms(&joystick, pwms, &len);
+    remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
+    debug_printf("Micros : %" PRIu64", Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
+                 micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
+  }
+}
+
 
 int main(int argc, char **argv)
 {
     int c;
+    int simulation = 0;
     char *device_path = NULL;
     char *joystick_type = NULL;
-    uint64_t next_run_usec;
     char *remote_host = NULL;
     uint16_t pwms[RCINPUT_UDP_NUM_CHANNELS];
 
@@ -123,6 +168,10 @@ int main(int argc, char **argv)
             debug_printf("set joystick_type to %s\n", optarg);
             joystick_type = optarg;
             break;
+        case 's':
+            debug_printf("Simulation mode\n");
+            simulation = 1;
+            break;
         case 'h':
             printf(usage);
             goto end;
@@ -152,16 +201,6 @@ int main(int argc, char **argv)
         goto end;
     }
 
-    if (remote_host == NULL) {
-        fprintf(stderr, "no ip address specified\n");
-        goto end;
-    }
-
-    if (remote_start(remote_host, &remote) == -1) {
-        fprintf(stderr, "remote start failed\n");
-        goto end;
-    }
-
     /* Calibration procedure to be added */
     if (joystick_type == NULL) {
         fprintf(stderr, "no joystick type specified\n");
@@ -169,26 +208,13 @@ int main(int argc, char **argv)
     }
     joystick_set_type(&joystick, joystick_type);
 
-    /* get start time, necessary for get_micro64) */
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-    next_run_usec = get_micro64() + 10000;
-    while (1) {
-        uint64_t dt = next_run_usec - get_micro64();
-        uint64_t micro64;
-        uint8_t len;
-
-        if (dt > 20000) {
-            // we've lost sync - restart
-            next_run_usec = get_micro64();
-        } else {
-            microsleep(dt);
-        }
-        next_run_usec += 10000;
-        joystick_get_pwms(&joystick, pwms, &len);
-        remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
-        debug_printf("Micros : %" PRIu64", Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
-                micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
+    /*
+      Run simulation if user gives simulation flag.
+     */
+    if (!simulation) {
+      run_remote(pwms, remote_host);
+    } else {
+      run_simulation();
     }
 
 end:

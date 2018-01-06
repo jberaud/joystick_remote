@@ -12,7 +12,7 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with joystick_remote.  
+    along with joystick_remote.
     If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -66,16 +66,16 @@ static void joystick_handle_axis(struct joystick *joystick,
     pthread_mutex_lock(&joystick->mutex);
 
     if (number == joystick->axes[JOYSTICK_AXIS_ROLL].number) {
-        joystick->pwms.roll = 
+        joystick->pwms.roll =
             axis_to_pwm(joystick->axes[JOYSTICK_AXIS_ROLL].direction * value);
     } else if (number == joystick->axes[JOYSTICK_AXIS_PITCH].number) {
-        joystick->pwms.pitch = 
+        joystick->pwms.pitch =
             axis_to_pwm(joystick->axes[JOYSTICK_AXIS_PITCH].direction * value);
     } else if (number == joystick->axes[JOYSTICK_AXIS_THROTTLE].number) {
         joystick->pwms.throttle =
             axis_to_pwm(joystick->axes[JOYSTICK_AXIS_THROTTLE].direction * value);
     } else if (number == joystick->axes[JOYSTICK_AXIS_YAW].number) {
-        joystick->pwms.yaw = 
+        joystick->pwms.yaw =
             axis_to_pwm(joystick->axes[JOYSTICK_AXIS_YAW].direction * value);
     }
     else {
@@ -159,7 +159,7 @@ static void *joystick_thread(void *arg)
             fprintf(stderr, "joystick_thread : unexpected event %d\n", event.type);
         }
     }
-    
+
     exit(EXIT_SUCCESS);
 
     return NULL;
@@ -252,4 +252,3 @@ int joystick_set_type(struct joystick *joystick, char *type)
     pthread_mutex_unlock(&joystick->mutex);
     return ret;
 }
-    
