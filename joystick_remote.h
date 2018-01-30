@@ -19,6 +19,7 @@
 #ifndef _JOYSTICK_REMOTE_H_
 #define _JOYSTICK_REMOTE_H_
 
+extern const char *pwm_explain[];
 void debug_printf(const char *fmt, ...);
 
 #endif

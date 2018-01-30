@@ -66,13 +66,13 @@ struct joystick {
 
     /* axis mapping */
     struct joystick_axis axes[JOYSTICK_NUM_AXIS];
-    
+
     /* modes pwm mapping */
     uint16_t mode_pwms[JOYSTICK_NUM_MODES];
 };
 
 int joystick_start(char *path, struct joystick *joystick);
 void joystick_get_pwms(struct joystick *joystick, uint16_t *pwms, uint8_t *len);
-int joystick_set_type(struct joystick *joystick, char *type);
+int joystick_set_type(struct joystick *joystick, char *type, char *mapping);
 
 #endif // _JOYSTICK_H_

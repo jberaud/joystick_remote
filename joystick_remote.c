@@ -12,7 +12,7 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with joystick_remote.  
+    along with joystick_remote.
     If not, see <http://www.gnu.org/licenses/>.
 */
 
@@ -40,9 +40,11 @@ static struct option long_options[] = {
     {"list",      no_argument, 0,           'l' },
     {"device",    required_argument, 0,     'd' },
     {"mode",      required_argument, 0,     'm' },
+    {"simulation",no_argument, 0,           's' },
     {"verbose",   no_argument, 0,           'v' },
     {"remote",    required_argument, 0,     'r' },
     {"type",      required_argument, 0,     't' },
+    {"mapping",   no_argument, 0,           'e' },
     {"help",      no_argument, 0,           'h' },
     {0, 0, 0, 0 }
 };
@@ -50,8 +52,16 @@ static struct option long_options[] = {
 static struct joystick joystick;
 static struct remote remote;
 
+const char *pwm_explain[] = {"Roll", "Pitch", "Throttle", "Yaw", "Mode"};
+
 static const char usage[] = "usage:\n\tjoystick_remote -d your_device "
                             "-t joystick_type -r remote_address:remote_port\n\n"
+                            "\t-e Custom mapping. "
+                            "%%u8,%%u8,%%u8,%%u8,%%u8,%%u8,%%u8,%%d8,%%u8,%%d8,%%u8,%%d8,%%u8,%%d8\n"
+                            "\t example { 0, 1, 2, 3, 4, 5}"
+                            "{{0, -1}, {1, -1}, {3, 1}, {2, 1}}"
+                            "\tfirst 8 is buttons rest axis, just skip {} and spaces\n\n"
+                            "\t-s Simulation mode. Can not be used with -r\n\n"
                             "\tjoystick types: xbox360, skycontroller and ps3\n\n";
 static uint8_t verbose = 0;
 
@@ -78,17 +88,79 @@ static uint64_t get_micro64()
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) - 
+    return 1.0e6*((ts.tv_sec + (ts.tv_nsec*1.0e-9)) -
                   (start_time.tv_sec +
-                   (start_time.tv_nsec*1.0e-9)));
+                  (start_time.tv_nsec*1.0e-9)));
 }
+
+
+void run_simulation(uint16_t pwms[])
+{
+  uint8_t size;
+
+  while (1) {
+    joystick_get_pwms(&joystick, pwms, &size);
+
+    printf("\033[H\033[J");
+    for(uint16_t i = 0; i < size/sizeof(pwms[0]); i++)
+    {
+      if(i < JOYSTICK_NUM_AXIS) {
+        printf("Axis number %d \t", joystick.axes[i].number);
+      }
+      printf("%s: ", pwm_explain[i]);
+      printf("%hu\n", pwms[i]);
+    }
+
+    microsleep(1000);
+  }
+}
+
+void run_remote(uint16_t pwms[], char *remote_host)
+{
+  uint64_t next_run_usec;
+
+  if (remote_host == NULL) {
+    fprintf(stderr, "no ip address specified\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (remote_start(remote_host, &remote) == -1) {
+    fprintf(stderr, "remote start failed\n");
+    exit(EXIT_FAILURE);
+  }
+
+  /* get start time, necessary for get_micro64) */
+  clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+  next_run_usec = get_micro64() + 10000;
+
+  while (1) {
+    uint64_t dt = next_run_usec - get_micro64();
+    uint64_t micro64;
+    uint8_t len;
+
+    if (dt > 20000) {
+      // we've lost sync - restart
+      next_run_usec = get_micro64();
+    } else {
+      microsleep(dt);
+    }
+    next_run_usec += 10000;
+    joystick_get_pwms(&joystick, pwms, &len);
+    remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
+    debug_printf("Micros : %" PRIu64", Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
+                 micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
+  }
+}
+
 
 int main(int argc, char **argv)
 {
     int c;
+    int simulation = 0;
     char *device_path = NULL;
     char *joystick_type = NULL;
-    uint64_t next_run_usec;
+    char *joystick_mapping = NULL;
     char *remote_host = NULL;
     uint16_t pwms[RCINPUT_UDP_NUM_CHANNELS];
 
@@ -97,7 +169,7 @@ int main(int argc, char **argv)
 
     while (1) {
 
-        c = getopt_long(argc, argv, "vld:m:r:cht:", long_options, NULL);
+        c = getopt_long(argc, argv, "vld:m:r:cht:se:", long_options, NULL);
         if (c == -1)
             break;
 
@@ -122,6 +194,14 @@ int main(int argc, char **argv)
         case 't':
             debug_printf("set joystick_type to %s\n", optarg);
             joystick_type = optarg;
+            break;
+        case 'e':
+            debug_printf("set mapping to %s\n", optarg);
+            joystick_mapping = optarg;
+            break;
+        case 's':
+            debug_printf("Simulation mode\n");
+            simulation = 1;
             break;
         case 'h':
             printf(usage);
@@ -152,43 +232,29 @@ int main(int argc, char **argv)
         goto end;
     }
 
-    if (remote_host == NULL) {
-        fprintf(stderr, "no ip address specified\n");
-        goto end;
-    }
-
-    if (remote_start(remote_host, &remote) == -1) {
-        fprintf(stderr, "remote start failed\n");
-        goto end;
-    }
-
     /* Calibration procedure to be added */
     if (joystick_type == NULL) {
         fprintf(stderr, "no joystick type specified\n");
         goto end;
     }
-    joystick_set_type(&joystick, joystick_type);
 
-    /* get start time, necessary for get_micro64) */
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-    next_run_usec = get_micro64() + 10000;
-    while (1) {
-        uint64_t dt = next_run_usec - get_micro64();
-        uint64_t micro64;
-        uint8_t len;
-
-        if (dt > 20000) {
-            // we've lost sync - restart
-            next_run_usec = get_micro64();
-        } else {
-            microsleep(dt);
+    if (!strcmp(joystick_type, "c") || !strcmp(joystick_type, "custom")) {
+        if (joystick_mapping == NULL) {
+            goto end;
         }
-        next_run_usec += 10000;
-        joystick_get_pwms(&joystick, pwms, &len);
-        remote_send_pwms(&remote, pwms, len, (micro64 = get_micro64()));
-        debug_printf("Micros : %" PRIu64", Roll : %d, Pitch : %d, Throttle : %d, Yaw : %d, Mode : %d\n",
-                micro64, pwms[0], pwms[1], pwms[2], pwms[3], pwms[4]);
+    }
+
+    if(joystick_set_type(&joystick, joystick_type, joystick_mapping) == -1) {
+        goto end;
+    }
+
+    /*
+      Run simulation if user gives simulation flag.
+     */
+    if (!simulation) {
+        run_remote(pwms, remote_host);
+    } else {
+        run_simulation(pwms);
     }
 
 end:
